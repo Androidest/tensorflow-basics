@@ -1,1 +1,1 @@
-tensorboard --logdir=.\ObjectDetection\BB_tensorboard
+tensorboard --logdir=.\GANS\tb_logs
