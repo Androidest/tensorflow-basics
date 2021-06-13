@@ -1,1 +1,1 @@
-tensorboard --logdir=.\GANS\WGAN\tb_logs
+tensorboard --logdir=.\GANS\WGAN_test\tb_logs

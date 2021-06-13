@@ -3,7 +3,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 from tensorflow.keras import layers
-from tensorflow.keras.regularizers import l2
+from tensorflow.keras.regularizers import L2
 import glob
 import imageio
 import os
@@ -31,23 +31,8 @@ def bn_relu(x, useRelu=True):
 
 def conv(x, filterNumb, kernel_size, strides=1, use_bias=True):
     fx = layers.Conv2D(filterNumb, kernel_size, strides, padding='same', 
-                    use_bias=use_bias)(x)
+                    use_bias=use_bias, kernel_regularizer=L2(0.01))(x)
     return fx
-
-def residual_block(x, filterNumb, isPooling=False):
-    strides = 1
-    shortcut = x
-    bn_x = bn_relu(x)
-
-    if isPooling:
-        strides = 2
-        shortcut = conv(bn_x, filterNumb, kernel_size=1, strides=strides)
-
-    fx = conv(bn_x, filterNumb, kernel_size=3, strides=strides)
-    fx = bn_relu(fx)
-    fx = conv(fx, filterNumb, kernel_size=3)
-    out = layers.Add()([shortcut, fx]) # skip
-    return out
 
 def gen_accuracy_fn(fake_pred):
     fooled = tf.where(fake_pred > 0, 1.0, 0.0)
@@ -137,25 +122,27 @@ def create_generator():
 
     return model
 
-def create_discriminator_resnet():
+def create_discriminator():
     inputs = layers.Input(shape=(28,28,1)) # 28*28
     hx = layers.ZeroPadding2D((2,2))(inputs) # 32*32
-    hx = conv(inputs, 32, kernel_size=5, strides=2)
-    hx = bn_relu(hx)
+
+    hx = conv(hx, 32, kernel_size=5, strides=2)
+    hx = layers.LeakyReLU(0.2)(hx)
     hx = layers.Dropout(0.3)(hx)
 
-    hx = conv(inputs, 64, kernel_size=5, strides=2)
-    hx = bn_relu(hx)
+    hx = conv(hx, 64, kernel_size=5, strides=2)
+    hx = layers.LeakyReLU(0.2)(hx)
     hx = layers.Dropout(0.3)(hx)
 
-    hx = conv(inputs, 128, kernel_size=5, strides=2)
-    hx = bn_relu(hx)
-    hx = layers.Dropout(0.3)(hx)
+    hx = conv(hx, 128, kernel_size=5, strides=2)
+    hx = layers.LeakyReLU(0.2)(hx)
+    hx = layers.Dropout(0.2)(hx)
 
     hx = layers.Flatten()(hx)
     hx = layers.Dense(512)(hx)
-    hx = bn_relu(hx)
+    hx = layers.LeakyReLU(0.2)(hx)
     hx = layers.Dropout(0.2)(hx)
+
     outputs = layers.Dense(1)(hx)
 
     model = tf.keras.Model(inputs, outputs)
@@ -168,10 +155,10 @@ from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay as LRDe
 import shutil
 
 epochs = 40
-gen_opt = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
-dis_opt = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
+gen_opt = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.5, beta_2=0.9)
+dis_opt = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.5, beta_2=0.9)
 generator = create_generator()
-discriminator = create_discriminator_resnet()
+discriminator = create_discriminator()
 checkpoint_path = './Checkpoints/'
 checkpoint = tf.train.Checkpoint(generator_optimizer=gen_opt,
                                  discriminator_optimizer=dis_opt,
@@ -238,7 +225,7 @@ gen_accuracy = 0
 for epoch in range(epochs):
     step = 0
     for real_img_batch in ds:
-        for i in range(3):
+        for i in range(2):
             rand_seed_batch = tf.random.normal(shape=(batch_size, 100))
             dis_loss, gen_accuracy = train_dis(real_img_batch, rand_seed_batch)
         rand_seed_batch = tf.random.normal(shape=(batch_size, 100))
