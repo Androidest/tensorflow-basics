@@ -16,7 +16,7 @@ def load_flatten_oneHot_dataset(classCount, batchSize):
 
     x_train = tf.reshape(x_train, shape=(len(x_train), imgWidth*imgHeight)) / 255 #flatten from (60000, 28, 28) to (60000, 784)
     y_train = tf.one_hot(y_train, classCount) # to one-hot form
-    ds_train = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(1000).batch(batchSize)
+    ds_train = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(1000, seed=123).batch(batchSize)
 
     x_test = tf.reshape(x_test, shape=(len(x_test), imgWidth*imgHeight)) / 255    #flatten from (10000, 28, 28) to (10000, 784)
 
@@ -43,7 +43,7 @@ for epoch in range(1000):
             # softmax turns negative value into value that infinite approach 0 & calculate probability distribution for each value
             # without softmax, output would be very different from expected result, impossible to train
             y_predict = tf.nn.softmax(x @ W + b)
-            cross_entropy = -tf.math.reduce_sum(y_real * tf.math.log(y_predict)) # -Σ(y_real * log(y_predict))
+            cross_entropy = tf.math.reduce_sum(-y_real * tf.math.log(y_predict), axis=1) # 
             return cross_entropy 
         # a = W * 1
         gradientDescent.minimize(loss, var_list=[W, b])

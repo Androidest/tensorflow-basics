@@ -7,10 +7,11 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+import shutil
 from tensorflow.python.keras.backend import dropout
 
 classCount = 10
-batchSize = 64
+batchSize = 128
 class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
                 'dog', 'frog', 'horse', 'ship', 'truck']
 
@@ -35,28 +36,24 @@ def loadData(classCount, batchSize):
         # brightness_range=(0.4, 1.4),
         # rescale=1./255,
         # rotation_range=10.0, 
-        width_shift_range=0.1,
-        height_shift_range=0.1,
+        # width_shift_range=0.1,
+        # height_shift_range=0.1,
         # shear_range=7.0,
         # zoom_range=(1,1.1),
         fill_mode='constant',
-        cval=255.0, # constant value
+        cval=0.0, # constant value
         data_format='channels_last', #(samples, height, width, channels)
     )
-    imGenerator.fit(x_train)
-    # mean = imGenerator.mean
-    # std = imGenerator.std + 1e-07
-    # print('mean: '+str(mean))
-    # print('std: '+str(std))
-    # imgNorm = lambda x: (x-mean)/std
 
     # add a channel dimension: (n, imgHeight, imgWidth) -> (n, imgHeight, imgWidth, 1), channel=1 with grey-scale images
     y_train = tf.reshape(y_train, shape=(len(y_train))).numpy()
-    train_gen = imGenerator.flow(x_train, y_train, batch_size=batchSize, shuffle=True)
+    y_train = tf.one_hot(y_train, 10)
+    train_gen = imGenerator.flow(x_train/127.5-1, y_train, batch_size=batchSize, shuffle=True)
 
     # x_test = imgNorm(x_test)
     y_test = tf.reshape(y_test, shape=(len(y_test))).numpy()
-    ds_test = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(512)
+    y_test = tf.one_hot(y_test, 10)
+    ds_test = tf.data.Dataset.from_tensor_slices((x_test/127.5-1, y_test)).batch(512)
 
     return (train_gen, ds_test)
 
@@ -71,27 +68,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 # ==================== train & valid data =============================
 initial_epoch_batch = 0
-weight_decay = 0.0001
+weight_decay = 0.01
 init_learning_rate = 0.001
-
-def lr_scheduler(epoch):
-    if epoch <= 20:
-        return (0.1 - init_learning_rate)*epoch/20 + init_learning_rate
-    elif epoch <= 40:
-        return (init_learning_rate - 0.1)*(epoch-20)/20 + 0.1
-    elif epoch <= 50:
-        return (0.0005 - init_learning_rate)*(epoch-40)/10 + init_learning_rate
-    else:
-        return 0.0005
 
 def bn_relu(x, useRelu=True):
     fx = layers.BatchNormalization()(x)
     if useRelu:
-        fx = layers.ReLU()(fx)
+        fx = layers.LeakyReLU(0.01)(fx)
     return fx
 
-def conv(x, filterNumb, kernel_size, strides=1, use_bias=True):
-    fx = layers.Conv2D(filterNumb, kernel_size, strides, padding='same', use_bias=use_bias, kernel_regularizer=l2(weight_decay))(x)
+def conv(x, filterNumb, kernel_size, strides=1, use_bias=True, padding='same'):
+    fx = layers.Conv2D(filterNumb, kernel_size, strides, padding=padding, use_bias=use_bias, kernel_regularizer=l2(weight_decay))(x) #
     return fx
 
 def residual_block(x, filterNumb, isPooling=False):
@@ -101,7 +88,7 @@ def residual_block(x, filterNumb, isPooling=False):
 
     if isPooling:
         strides = 2
-        shortcut = conv(bn_x, filterNumb, kernel_size=1, strides=strides)
+        shortcut = conv(x, filterNumb, kernel_size=1, strides=strides)
     
     fx = conv(bn_x, filterNumb, kernel_size=3, strides=strides)
     fx = bn_relu(fx)
@@ -111,13 +98,11 @@ def residual_block(x, filterNumb, isPooling=False):
 
 def create_resnet():
     inputs = layers.Input(shape=(32,32,3)) # 32*32
-    hx = layers.BatchNormalization()(inputs)
-    hx = conv(hx, 16, kernel_size=3)
-    hx = residual_block(hx, 16)
+    hx = conv(inputs, 16, kernel_size=3)
     hx = residual_block(hx, 16)
     hx = residual_block(hx, 16)
 
-    hx = residual_block(hx, 32, isPooling=True) # 16*16
+    hx = residual_block(hx, 32, isPooling=True)# 16*16
     hx = residual_block(hx, 32)
     hx = residual_block(hx, 32)
     
@@ -125,38 +110,25 @@ def create_resnet():
     hx = residual_block(hx, 64)
     hx = residual_block(hx, 64)
 
+    hx = residual_block(hx, 128, isPooling=True) # 4*4
+    hx = residual_block(hx, 128)
+    
+    hx = residual_block(hx, 256, isPooling=True) 
+    hx = residual_block(hx, 256)
+
     hx = bn_relu(hx)
     hx = layers.GlobalAveragePooling2D()(hx)
+    
+    hx = layers.Dropout(0.2)(hx)
     outputs = layers.Dense(10)(hx)
 
     model = tf.keras.Model(inputs, outputs)
+    model.summary()
     return model
 
-def display_history(history):
-    history = history.history
-    if len(history) == 0:
-        return
-    plt.figure(0)
-    plt.plot(history['accuracy'])
-    plt.plot(history['val_accuracy'])
-    plt.title('model accuracy')
-    plt.ylabel('accuracy')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'])
-    plt.show()
-
-    plt.figure(1)
-    plt.plot(history['loss'])
-    plt.plot(history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'])
-    plt.show()
-
 if initial_epoch_batch == 0:
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-    opt_fn = tf.keras.optimizers.SGD(init_learning_rate, momentum=0.9)
+    loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing=0.1)
+    opt_fn = tf.keras.optimizers.Adam(init_learning_rate)
     model = create_resnet()
     model.compile(optimizer=opt_fn, loss=loss_fn, metrics=['accuracy'])
 else:
@@ -164,19 +136,15 @@ else:
     print(model.evaluate(x=ds_test, verbose=1))
 
 # start training
-lr_cb = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
-save_cb = tf.keras.callbacks.ModelCheckpoint(
-    './Models/Checkpoint', monitor='val_accuracy', verbose=1, save_best_only=False,
-    save_weights_only=False, mode='max', save_freq='epoch'
-)
+shutil.rmtree('./tb_logs', ignore_errors=True)
+tb_cb = tf.keras.callbacks.TensorBoard('./tb_logs/')
 
-ebatch = 20
+ebatch = 10
 for i in range(initial_epoch_batch, 5):
-    history = model.fit(x=train_gen, epochs=(i+1)*ebatch, initial_epoch=i*ebatch, 
-                        callbacks=[lr_cb, save_cb], 
-                        validation_data=ds_test, validation_freq=1, verbose=1)
-    display_history(history)
-
+    model.fit(x=train_gen, epochs=(i+1)*ebatch, initial_epoch=i*ebatch, 
+            callbacks=[tb_cb], 
+            validation_data=ds_test, validation_freq=1, verbose=1)
+model.save('/Models/CIFAR10_ResNet-18.h5', overwrite=True, include_optimizer=True)
 
 
 # %% ===================================
@@ -212,7 +180,7 @@ def predict(frame):
     img = tf.reshape(img, shape=(1, outputSize, outputSize, 3))
     predict = tf.argmax(model.predict(img), axis=1).numpy()[0]
     result = np.copy(frame)
-    cv2.putText(result, str(class_names[predict]), (40,150), cv2.FONT_HERSHEY_COMPLEX, 1.3, (0,255,0), 2)
+    cv2.putText(result, str(class_names[predict]), (20,150), cv2.FONT_HERSHEY_COMPLEX, 1.3, (0,255,0), 2)
     cv2.imshow(winName, result)
 
 
