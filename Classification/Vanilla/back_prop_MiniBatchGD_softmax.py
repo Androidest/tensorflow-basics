@@ -5,7 +5,7 @@ import matplotlib as plt
 import tensorflow as tf # to get the MNIST dataset
 
 # load data 
-batch_size = 60
+batch_size = 100
 learning_rate = 0.001
 
 (X,I), (TX, TY) = tf.keras.datasets.mnist.load_data()
@@ -34,7 +34,7 @@ for epoch in range(10):
         # calculate cross-entropy -> softmax gradient
         dy = batch_y * (softmax - 1 ) 
         assert dy.shape == (batch_size, 10)
-        dW = np.transpose(batch_x) @ dy / batch_size
+        dW = np.transpose(batch_x) @ dy  / batch_size
         assert dW.shape == W.shape
         db = np.sum(dy, axis=0) / batch_size
         assert db.shape == b.shape
