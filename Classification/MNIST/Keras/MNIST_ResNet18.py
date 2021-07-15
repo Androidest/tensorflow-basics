@@ -154,6 +154,12 @@ else:
 
 # start training
 lr_cb = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
+board_cb = tf.keras.callbacks.TensorBoard(
+    log_dir='./tb_logs',
+    histogram_freq=0,  # How often to log histogram visualizations
+    embeddings_freq=1,  # How often to log embedding visualizations
+    update_freq="epoch",
+) 
 save_cb = tf.keras.callbacks.ModelCheckpoint(
     './Models/Checkpoint', monitor='val_accuracy', verbose=1, save_best_only=False,
     save_weights_only=False, mode='max', save_freq='epoch'
@@ -162,7 +168,7 @@ save_cb = tf.keras.callbacks.ModelCheckpoint(
 ebatch = 20
 for i in range(initial_epoch_batch, 10):
     history = model.fit(x=train_gen, epochs=(i+1)*ebatch, initial_epoch=i*ebatch, 
-                        callbacks=[lr_cb, save_cb], 
+                        callbacks=[lr_cb, save_cb, board_cb], 
                         validation_data=ds_test, validation_freq=1, verbose=1)
     display_history(history)
 

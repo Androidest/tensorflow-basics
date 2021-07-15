@@ -17,10 +17,10 @@ class_names = ['Background', 'Me', 'BB']
 tensorboard_path = "./BB_tensorboard"
 
 def parse_files(filename, label):
-        image_string = tf.io.read_file(filename)
-        image_decoded = tf.image.decode_jpeg(image_string, channels=3)
-        image = tf.cast(image_decoded, tf.float32) / 127.5 - 1
-        return image, label
+    image_string = tf.io.read_file(filename)
+    image_decoded = tf.image.decode_jpeg(image_string, channels=3)
+    image = tf.cast(image_decoded, tf.float32) / 127.5 - 1
+    return image, label
 
 def loadData(batchSize):
     dsDir = './BB_Faces/'
@@ -202,7 +202,7 @@ lr_cb = tf.keras.callbacks.LearningRateScheduler(learningRate)
 board_cb = tf.keras.callbacks.TensorBoard(
     log_dir=tensorboard_path,
     histogram_freq=0,  # How often to log histogram visualizations
-    embeddings_freq=0,  # How often to log embedding visualizations
+    embeddings_freq=1,  # How often to log embedding visualizations
     update_freq="epoch",
 ) 
 

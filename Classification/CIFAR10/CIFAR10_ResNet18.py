@@ -137,7 +137,7 @@ else:
 
 # start training
 shutil.rmtree('./tb_logs', ignore_errors=True)
-tb_cb = tf.keras.callbacks.TensorBoard('./tb_logs/')
+tb_cb = tf.keras.callbacks.TensorBoard('./tb_logs/', embeddings_freq=1)
 
 ebatch = 10
 for i in range(initial_epoch_batch, 5):
