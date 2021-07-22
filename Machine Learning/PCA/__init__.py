@@ -27,7 +27,13 @@ class PCA:
                 self.pc = u[:,:k] # select the first kth PCs, for n to k dimensional reduction
                 self.zca_pc = self.pc @ np.diag(1/np.sqrt(s[:k]))
                 return
-    
+
+    def visualize_2d(self, x):
+        x = x.T # turn x to default math form
+        pc_2d = self.pc[:,:2]
+        x = pc_2d.T @ x
+        return x[0], x[1]
+
     def reduce_dim(self, x, use_whitening=False):
         x = x.T # turn x to default math form 
         if use_whitening:

@@ -16,6 +16,6 @@ u = u[:,:2]# get just PC1 & PC2
 x_2d = u.T @ x
 
 plt.title('MNIST PCA Visualization')
-plt.scatter(x_2d[0, :], x_2d[1, :])
+plt.scatter(x_2d[0], x_2d[1])
 
 # %%
