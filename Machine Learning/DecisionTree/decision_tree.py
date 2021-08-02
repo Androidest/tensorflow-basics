@@ -11,10 +11,10 @@ class DecisionTree:
     def __init__(self, data) -> None:
         # prepare data
         (x_train, y_train), (x_test, y_test) = data
-        x_train = np.reshape(x_train, (-1, 28*28))[:10000] / 255 - 0.5
+        x_train = np.reshape(x_train, (-1, 28*28)) / 255 - 0.5
         x_test = np.reshape(x_test, (-1, 28*28)) / 255 - 0.5
         self.x = x_train
-        self.y_train = y_train[:10000]
+        self.y_train = y_train
         self.y_test = y_test
 
         # apply PCA to reduce dimension
