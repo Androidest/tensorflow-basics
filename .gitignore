@@ -4,3 +4,4 @@
 /ObjectDetection/BB_Faces/
 **/Checkpoints
 **/Results
+**/tb_logs
