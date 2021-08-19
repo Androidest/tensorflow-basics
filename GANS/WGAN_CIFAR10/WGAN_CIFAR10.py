@@ -116,7 +116,7 @@ def create_generator(seed_size):
     hx = conv(hx, 32, kernel_size=3)
     hx = layers.LeakyReLU(0.3)(hx)
 
-    hx = layers.UpSampling2D(size=(2,2))(hx)
+    hx = layers.UpSampling2D(size=(2,2))(hx) 
     hx = conv(hx, 16, kernel_size=3)
     hx = layers.LeakyReLU(0.3)(hx)
     hx = conv(hx, 16, kernel_size=3)
