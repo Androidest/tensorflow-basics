@@ -18,26 +18,34 @@ def load_data(batch_size):
         image = tf.cast(image_decoded, tf.float32) / 127.5 - 1
         return image
 
-    ds= tf.data.Dataset.list_files('C:/Users/alans/tensorflow_datasets/celeb_a/img_align_celeba/*.jpg', shuffle=False)
-    ds = ds.shuffle(len(ds)).map(parse_files)
-    ds = ds.batch(batch_size, drop_remainder=True)
-    ds = ds.prefetch(buffer_size=batch_size)
+    # ds= tf.data.Dataset.list_files('C:/Users/alans/tensorflow_datasets/celeb_a/img_align_celeba/*.jpg', shuffle=False)
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10.load_data()
+
+    x_train = x_train[np.where(y_train[:,0] == 2)]
+    plt.imshow(x_train[50,:,:,:])
+    x_train = x_train / 127.5 - 1
+    x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
+    ds = tf.data.Dataset.from_tensor_slices(x_train).shuffle(1000).batch(batch_size)
+    # ds = ds.shuffle(len(ds)).map(parse_files)
+    # ds = ds.batch(batch_size, drop_remainder=True)
+    # ds = ds.prefetch(buffer_size=batch_size)
     
     return ds
 
-batch_size = 80
+batch_size = 64
 ds = load_data(batch_size)
 
 # %%
 def bn_relu(x, useRelu=True):
     fx = layers.BatchNormalization()(x)
     if useRelu:
-        fx = layers.LeakyReLU(0.2)(fx)
+        fx = layers.LeakyReLU(0.3)(fx)
     return fx
 
-def conv(x, filterNumb, kernel_size, strides=1, use_bias=True):
-    fx = layers.Conv2D(filterNumb, kernel_size, strides, padding='same', 
-                    use_bias=use_bias, kernel_regularizer=L2(0.01))(x)
+def conv(x, filterNumb, kernel_size, strides=1, padding='same', use_bias=True):
+    fx = layers.Conv2D(filterNumb, kernel_size, strides, padding=padding,
+
+                    use_bias=use_bias)(x)
     return fx
 
 def residual_block(x, filterNumb, isPooling=False):
@@ -57,7 +65,7 @@ def residual_block(x, filterNumb, isPooling=False):
 
 def conv_transpose(model, kernels, strides, activation=None):
     model.add(layers.BatchNormalization())
-    model.add(layers.LeakyReLU(0.2))
+    model.add(layers.LeakyReLU(0.3))
     model.add(layers.Conv2DTranspose(kernels, (3, 3), strides=strides, padding='same', use_bias=False))   
 
 def generate_image(gan_model, seed=None, isShow=True, isSaveFile=False):
@@ -66,7 +74,7 @@ def generate_image(gan_model, seed=None, isShow=True, isSaveFile=False):
     img_count = w * h
 
     if seed is None:
-        seed = tf.random.normal(shape=(4, gan_model.seed_size))
+        seed = tf.random.normal(shape=(4, 1, 1, gan_model.seed_size))
 
     fake_img_batch = gan_model.generator(test_seed, training=False)
 
@@ -88,84 +96,87 @@ def generate_image(gan_model, seed=None, isShow=True, isSaveFile=False):
         
 # models
 def create_generator(seed_size):
-    model = tf.keras.Sequential()
-    model.add(layers.Dense(4*3*128, use_bias=False, input_shape=(seed_size,)))
-    model.add(layers.Reshape((4, 3, 128)))
-    assert model.output_shape == (None, 4, 3, 128)
+    inputs = layers.Input(shape=(1, 1, seed_size))
 
-    model.add(layers.UpSampling2D((2,2)))
-    assert model.output_shape == (None, 8, 6, 128)
+    hx = layers.UpSampling2D(size=(4,4))(inputs)
+    hx = conv(hx, seed_size, kernel_size=4)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, seed_size, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
 
-    conv_transpose(model, 64, (2,2))
-    assert model.output_shape == (None, 16, 12, 64)
-    
-    model.add(layers.UpSampling2D((2,2)))
-    assert model.output_shape == (None, 32, 24, 64)
+    hx = layers.UpSampling2D(size=(2,2))(hx)
+    hx = conv(hx, 64, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, 64, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
 
-    conv_transpose(model, 32, (2,2))
-    assert model.output_shape == (None, 64, 48, 32)
+    hx = layers.UpSampling2D(size=(2,2))(hx)
+    hx = conv(hx, 32, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, 32, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
 
-    conv_transpose(model, 16, (2,2))
-    assert model.output_shape == (None, 128, 96, 16)
+    hx = layers.UpSampling2D(size=(2,2))(hx)
+    hx = conv(hx, 16, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, 16, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
+    outputs = conv(hx, 3, kernel_size=1)
+    outputs = layers.Activation('tanh')(outputs)
 
-    conv_transpose(model, 3, (2,2))
-    assert model.output_shape == (None, 256, 192, 3)
-
-    model.add(layers.Activation('tanh'))
-    model.add(layers.Cropping2D(((19,19),(7,7))))
-    assert model.output_shape == (None, 218, 178, 3)
+    model = tf.keras.Model(inputs, outputs, name="Generator")
     model.summary()
-
     return model
 
+
 def create_discriminator():
-    inputs = layers.Input(shape=(218, 178, 3))
+    inputs = layers.Input(shape=(32, 32, 3))
+    hx = conv(inputs, 16, kernel_size=1)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, 16, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, 32, kernel_size=3, strides=2)
+    hx = layers.LeakyReLU(0.3)(hx)
 
-    hx = conv(inputs, 18, kernel_size=7, strides=2)
-    hx = layers.LeakyReLU(0.2)(hx)
-    hx = layers.Dropout(0.3)(hx)
+    hx = conv(hx, 32, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, 64, kernel_size=3, strides=2)
+    hx = layers.LeakyReLU(0.3)(hx)
 
-    hx = conv(hx, 32, kernel_size=5, strides=2)
-    hx = layers.LeakyReLU(0.2)(hx)
-    hx = layers.Dropout(0.3)(hx)
+    hx = conv(hx, 64, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, 128, kernel_size=3, strides=2)
+    hx = layers.LeakyReLU(0.3)(hx)
 
-    hx = conv(hx, 64, kernel_size=5, strides=2)
-    hx = layers.LeakyReLU(0.2)(hx)
-    hx = layers.Dropout(0.3)(hx)
-
-    # hx = conv(hx, 84, kernel_size=5, strides=2)
-    # hx = layers.LeakyReLU(0.2)(hx)
-    # hx = layers.Dropout(0.3)(hx)
-
-    hx = layers.GlobalAveragePooling2D()(hx)
-    hx = layers.Dense(128)(hx)
-    hx = layers.LeakyReLU(0.2)(hx)
-    hx = layers.Dropout(0.2)(hx)
+    hx = conv(hx, 128, kernel_size=3)
+    hx = layers.LeakyReLU(0.3)(hx)
+    hx = conv(hx, 128, kernel_size=4, strides=4, padding='valid')
+    hx = layers.LeakyReLU(0.3)(hx)
 
     outputs = layers.Dense(1)(hx)
 
-    model = tf.keras.Model(inputs, outputs)
+    model = tf.keras.Model(inputs, outputs, name="Discriminator")
     model.summary()
     return model
 
 def create_WGAN_GP(seed_size, gen_lr, dis_lr, dis_extra_steps):
     generator = create_generator(seed_size)
     discriminator = create_discriminator()
-    gen_opt = tf.keras.optimizers.RMSprop(learning_rate=gen_lr)
-    dis_opt = tf.keras.optimizers.RMSprop(learning_rate=dis_lr)
+    gen_opt = tf.keras.optimizers.Adam(learning_rate=gen_lr)
+    dis_opt = tf.keras.optimizers.Adam(learning_rate=dis_lr)
     gen_loss_fn = lambda fake_pred: -tf.reduce_mean(fake_pred)
     dis_loss_fn = lambda real_pred, fake_pred: tf.reduce_mean(fake_pred) - tf.reduce_mean(real_pred)
     gan_model = WGAN_GP(discriminator, generator, seed_size, dis_extra_steps=dis_extra_steps)
     gan_model.compile(gen_opt, dis_opt, gen_loss_fn, dis_loss_fn)
     return gan_model
 
-epochs = 40
-seed_size = 100
+epochs = 300
+seed_size = 128
 gen_lr = 0.0001
 dis_lr = 0.0001
 
-test_seed = tf.random.normal(shape=(4, seed_size))
-gan_model = create_WGAN_GP(seed_size, gen_lr, dis_lr, dis_extra_steps=2)
+test_seed = tf.random.normal(shape=(4, 1, 1, seed_size))
+gan_model = create_WGAN_GP(seed_size, gen_lr, dis_lr, dis_extra_steps=5)
     
 
 # %% ======= training =================
@@ -173,7 +184,7 @@ shutil.rmtree('./tb_logs', ignore_errors=True)
 shutil.rmtree('./Results', ignore_errors=True)
 class GANMonitor(tf.keras.callbacks.Callback):
     def on_batch_end(self, batch, logs):
-        if batch % 40 == 0:
+        if batch % 200 == 0:
             generate_image(self.model, seed=test_seed, isShow=False, isSaveFile=True)
         
 mon_cb = GANMonitor()
@@ -197,8 +208,3 @@ def create_gif():
         writer.append_data(image)
 create_gif()
 
-# %%
-import tensorflow as tf
-
-
-# %%

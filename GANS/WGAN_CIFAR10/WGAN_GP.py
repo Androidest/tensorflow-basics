@@ -65,9 +65,9 @@ class WGAN_GP(tf.keras.Model):
         batch_size = tf.shape(real_img_batch)[0]
 
         for i in range(self.dis_extra_steps):
-            rand_seed_batch = tf.random.normal(shape=(batch_size, self.seed_size))
+            rand_seed_batch = tf.random.normal(shape=(batch_size, 1, 1, self.seed_size))
             dis_loss = self.train_dis(real_img_batch, rand_seed_batch, batch_size)
-        rand_seed_batch = tf.random.normal(shape=(batch_size, self.seed_size))
+        rand_seed_batch = tf.random.normal(shape=(batch_size, 1, 1, self.seed_size))
         gen_loss = self.train_gen(rand_seed_batch)
         
         return {"dis_loss": dis_loss, "gen_loss": gen_loss}
